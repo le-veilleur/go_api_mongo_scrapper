@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  web:
+    depends_on: [db]
+    build: 
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: "${DATABASE_URL}" # URL DB
+      GMAIL_APP_PASSWORD: "${GMAIL_APP_PASSWORD}"
+      WAIT_HOSTS: db
+    ports:
+      - 3000:3000
+    volumes:
+      - .:/usr/src/app
+    command: go run cmd/main.go -b 0.0.0.0
