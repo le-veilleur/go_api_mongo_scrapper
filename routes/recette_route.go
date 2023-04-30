@@ -6,5 +6,5 @@ import (
 )
 
 func RecetteRoute(app *fiber.App) {
-	app.Get("/recettes", controllers.GetRecettes)
+	app.Post("/recettes", controllers.PostRecettes)
 }

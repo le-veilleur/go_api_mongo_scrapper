@@ -19,7 +19,7 @@ type recettes struct {
 	Descriptions string `json:"descriptions"`
 	Ingredients  string `json:"ingredients"`
 	Photos       string `json:"photos"`
-	Directions   string `json:"directions"`
+	Instructions string `json:"instructions"`
 	Page         string `json:"line"`
 }
 
@@ -59,7 +59,7 @@ func main() {
 			Page:         link,
 			Photos:       image,
 			Ingredients:  h.ChildText("div.mntl-structured-ingredients"),
-			Directions:   h.ChildText("div.recipe__steps"),
+			Instructions: h.ChildText("div.recipe__steps"),
 		}
 		fmt.Println(recettes)
 		allData.Recettes = append(allData.Recettes, recettes)

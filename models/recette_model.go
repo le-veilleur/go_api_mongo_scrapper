@@ -10,7 +10,7 @@ type Recette struct {
 	Descriptions string             `json:"descriptions" bson:"descriptions"`
 	Ingredients  string             `json:"ingredients" bson:"ingredients"`
 	Photos       string             `json:"photos" bson:"photos"`
-	Directions   string             `json:"directions" bson:"directions"`
+	Instructions   string             `json:"instructions" bson:"instructions"`
 	Page         string             `json:"line" bson:"line"`
 	SerialNumber string             `json:"serial_number" bson:"serial_number"`
 }
