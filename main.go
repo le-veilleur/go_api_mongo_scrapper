@@ -13,7 +13,7 @@ func main() {
 	configs.ConnectDB()
 
 	//routes
-	routes.UserRoute(app) //add this
+	routes.RecetteRoute(app) //add this
 
 	app.Listen(":3000")
 }

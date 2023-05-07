@@ -1,16 +1,19 @@
 package models
 
-import (
-	"go.mongodb.org/mongo-driver/bson/primitive"
-)
-
 type Recette struct {
-	Id           primitive.ObjectID `json:"id,omitempty"`
-	Name         string             `json:"name" bson:"name"`
-	Descriptions string             `json:"descriptions" bson:"descriptions"`
-	Ingredients  string             `json:"ingredients" bson:"ingredients"`
-	Photos       string             `json:"photos" bson:"photos"`
-	Instructions   string             `json:"instructions" bson:"instructions"`
-	Page         string             `json:"line" bson:"line"`
-	SerialNumber string             `json:"serial_number" bson:"serial_number"`
+	Name         string        `json:"name" swagger:"description(Nom de la recette)"`
+	Page         string        `json:"page" swagger:"description(URL de la page de la recette)"`
+	Image        string        `json:"image" swagger:"description(URL de l'image de la recette)"`
+	Ingredients  []Ingredient  `json:"ingredients" swagger:"description(Liste des ingrédients de la recette)"`
+	Instructions []Instruction `json:"Instructions" swagger:"description(Liste des instructions de la recette)"`
+}
+
+type Ingredient struct {
+	Quantity string `json:"quantity" swagger:"description(Quantité de l'ingrédient)"`
+	Unit     string `json:"unit" swagger:"description(Unité de mesure de l'ingrédient)"`
+}
+
+type Instruction struct {
+	Number      string `json:"number" swagger:"description(Numéro de l'instruction)"`
+	Description string `json:"description" swagger:"description(Description de l'instruction)"`
 }

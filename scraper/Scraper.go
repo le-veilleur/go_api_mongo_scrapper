@@ -2,40 +2,35 @@ package main
 
 import (
 	"encoding/json"
-
 	"fmt"
-
+	"log"
 	"os"
+	"strconv"
 
 	"github.com/gocolly/colly"
 )
 
-type data struct {
-	Recettes []recettes `json:"recettes"`
+type Recipe struct {
+	Name         string        `json:"name"`
+	Page         string        `json:"page"`
+	Image        string        `json:"image"`
+	Ingredients  []Ingredient  `json:"ingredients"`
+	Instructions []Instruction `json:"Instructions"`
 }
 
-type recettes struct {
-	Name         string `json:"name"`
-	Descriptions string `json:"descriptions"`
-	Ingredients  string `json:"ingredients"`
-	Photos       string `json:"photos"`
-	Instructions string `json:"instructions"`
-	Page         string `json:"line"`
+type Ingredient struct {
+	Quantity string `json:"quantity"`
+	Unit     string `json:"unit"`
 }
 
-var allRecettes []recettes
-var image string
-var link string
+type Instruction struct {
+	Number      string `json:"number"`
+	Description string `json:"description"`
+}
 
 func main() {
-
-	allData := data{
-		Recettes: []recettes{},
-	}
-
-	c := colly.NewCollector(
-		colly.AllowedDomains("allrecipes.com", "www.allrecipes.com"),
-	)
+	// Créer une instance de collecteur
+	c := colly.NewCollector()
 
 	c.OnRequest(func(r *colly.Request) {
 		fmt.Println("Scraping:", r.URL)
@@ -45,37 +40,66 @@ func main() {
 		fmt.Println("Status:", r.StatusCode)
 	})
 
-	// OnHTML enregistre une fonction. La fonction sera exécutée sur chaque HTML élément correspondant au paramètre
-	c.OnHTML("div.mntl-taxonomysc-article-list-group .mntl-card", func(h *colly.HTMLElement) {
-		link = h.Attr("href")
-		image = h.ChildAttr("img", "data-src")
-		c.Visit(link)
-	})
+	var recipes []Recipe
 
-	c.OnHTML("article.mntl-article", func(h *colly.HTMLElement) {
-		recettes := recettes{
-			Name:         h.ChildText("h1.type--lion"),
-			Descriptions: h.ChildText("p.article-subheading"),
-			Page:         link,
-			Photos:       image,
-			Ingredients:  h.ChildText("div.mntl-structured-ingredients"),
-			Instructions: h.ChildText("div.recipe__steps"),
+	// Sélectionner les liens de recette et visiter chaque page de recette
+	c.OnHTML("div.mntl-taxonomysc-article-list-group .mntl-card", func(e *colly.HTMLElement) {
+		page := e.Attr("href")
+		title := e.ChildText("span.card__title-text")
+		image := e.ChildAttr("img", "data-src")
+
+		recipe := Recipe{Name: title, Page: page, Image: image}
+
+		recipes = append(recipes, recipe)
+
+		fmt.Println("La recette", recipe.Name, "a été collectée")
+
+		// Visiter la page de recette
+		err := c.Visit(page)
+		if err != nil {
+			log.Println("Erreur lors de la visite de la page de recette: ", err)
+			return
 		}
-		fmt.Println(recettes)
-		allData.Recettes = append(allData.Recettes, recettes)
+		e.Request.Visit(page)
 	})
 
-	c.OnError(func(r *colly.Response, err error) {
-		fmt.Println("Request URL:", r.Request.URL, "failed with response:", r, "nError:", err)
+	c.OnHTML("div.mntl-structured-ingredients", func(e *colly.HTMLElement) {
+		ingredients := []Ingredient{}
+
+		// Nameig := e.ChildText("h2.mntl-structured-ingredients__heading")
+		// ingredients = append(ingredients, Ingredient{Nameig: Nameig})
+
+		e.ForEach("li.mntl-structured-ingredients__list-item", func(_ int, ingr *colly.HTMLElement) {
+			quantityElement := ingr.DOM.Find("span[data-ingredient-quantity=true]")
+			unitElement := ingr.DOM.Find("span[data-ingredient-unit=true]")
+			quantity := quantityElement.Text()
+			unit := unitElement.Text()
+			ingredients = append(ingredients, Ingredient{Quantity: quantity, Unit: unit})
+		})
+		recipes[len(recipes)-1].Ingredients = ingredients
 	})
 
-	c.Visit("https://www.allrecipes.com/recipes/17562/dinner/")
+	c.OnHTML("div.recipe__steps", func(e *colly.HTMLElement) {
+		instructions := []Instruction{}
+		e.ForEach("li", func(i int, inst *colly.HTMLElement) {
+			number := strconv.Itoa(i + 1)
+			description := inst.ChildText("p.mntl-sc-block")
+			instructions = append(instructions, Instruction{Number: number, Description: description})
+		})
+		recipes[len(recipes)-1].Instructions = instructions
+	})
 
-	content, err := json.Marshal(allData)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
+	// Enregistrer la recette dans le fichier JSON
+	c.OnScraped(func(r *colly.Response) {
+		content, err := json.Marshal(recipes)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		os.WriteFile("data.json", content, 0644)
+		fmt.Println("Toutes les recettes ont été enregistrées dans le fichier 'recettes.json'")
+	})
 
-	os.WriteFile("recettes.json", content, 0644)
-	fmt.Println("Total recettes: ", len(allRecettes))
+	// Démarrer le scraping
+	c.Visit("https://www.allrecipes.com/recipes/16369/soups-stews-and-chili/soup/")
+
 }
