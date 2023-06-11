@@ -1,7 +1,7 @@
 
 ## Deployment
 
-Pour activer le scraper fait. Ou (dans le dossier ou se trouve le main.go)
+Pour activer le scraper fait.
 ```bash
   docker comose up -d
 ```
