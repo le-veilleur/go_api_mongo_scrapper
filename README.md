@@ -3,7 +3,7 @@
 
 Pour activer le scraper fait. Ou (dans le dossier ou se trouve le main.go)
 ```bash
-  go run main.go
+  docker comose up -d
 ```
 
 
