@@ -111,7 +111,7 @@ func main() {
 			log.Println("Erreur lors de la sérialisation des recettes: ", err)
 			return
 		}
-		fileName := "data.json"
+		fileName := "/go_api_mongo_scrapper/scraper/data.json"
 		err = os.WriteFile(fileName, content, 0644)
 		if err != nil {
 			log.Println("Erreur lors de l'enregistrement des recettes: ", err)

@@ -20,3 +20,6 @@ RUN go build -o scraper ./scraper.go
 
 # Revenir au répertoire principal
 WORKDIR /go_api_mongo_scrapper
+
+
+CMD [ "./server" ]

@@ -16,6 +16,7 @@ import (
 // @Router /recettes/{name} [get]
 
 func RecetteRoute(app *fiber.App) {
+	app.Post("/scraper/run", controllers.LaunchScraper)
 	app.Post("/recettes", controllers.PostRecette)
 	app.Get("/recettes", controllers.GetAllRecettes)
 	app.Get("/recette/:id", controllers.GetRecetteByID)

@@ -12,7 +12,6 @@ services:
       - go_api_mongo_scrapper_network
     depends_on:
       - db
-    command: ["/go_api_mongo_scrapper/server"] # Exécute le binaire du serveur
 
   db:
     image: mongo:latest
@@ -25,18 +24,6 @@ services:
       - db_data:/data/db
     networks:
       - go_api_mongo_scrapper_network
-
-  scraper:
-    build:
-      context: .
-      dockerfile: ./dockerfile
-    container_name: go_scraper
-    networks:
-      - go_api_mongo_scrapper_network
-    depends_on:
-      - db
-      - server
-    command: ["/go_api_mongo_scrapper/scraper/scraper"] # Exécute le binaire du scraper
 
 volumes:
   db_data:
