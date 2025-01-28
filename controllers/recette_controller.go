@@ -3,146 +3,156 @@ package controllers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
+	"time"
 
-	"github.com/go-playground/validator"
 	"github.com/gofiber/fiber/v2"
-	"github.com/maxime-louis14/api-golang/configs"
+	"github.com/maxime-louis14/api-golang/database"
 	"github.com/maxime-louis14/api-golang/models"
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"gopkg.in/mgo.v2/bson"
 )
 
-var recetteCollection *mongo.Collection = configs.GetCollection(configs.DB, "recettes")
-var validate = validator.New()
+var recetteCollection *mongo.Collection = database.OpenCollection(database.Client, "recettes")
 
+// getScraperDataPath retourne un chemin absolu vers data.json
+func getScraperDataPath() (string, error) {
+	// Chemin absolu pour Docker
+	dataPath := "/go_api_mongo_scrapper/scraper/data.json"
+	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
+		return "", errors.New("data.json file does not exist at " + dataPath)
+	}
+	return dataPath, nil
+}
+
+// PostRecette ajoute des recettes en batch depuis un fichier JSON
 func PostRecette(c *fiber.Ctx) error {
-	// Ouvrir le fichier data.json
-	file, err := os.Open("data.json")
+	// Obtenir le chemin complet vers data.json
+	dataPath, err := getScraperDataPath()
 	if err != nil {
-		return err
+		log.Printf("Failed to get data path: %v", err)
+		return c.Status(500).SendString("Erreur lors de la localisation du fichier data.json")
+	}
+
+	// Ouvrir le fichier data.json
+	file, err := os.Open(dataPath)
+	if err != nil {
+		log.Printf("Failed to open file %s: %v", dataPath, err)
+		return c.Status(500).SendString("Erreur lors de l'ouverture du fichier data.json")
 	}
 	defer file.Close()
 
-	// Lire les données JSON dans un []byte
+	// Lire les données JSON
 	data, err := ioutil.ReadAll(file)
 	if err != nil {
-		return err
+		log.Printf("Failed to read file %s: %v", dataPath, err)
+		return c.Status(500).SendString("Erreur lors de la lecture du fichier data.json")
 	}
 
-	// Décodez les données JSON dans une variable slice de recettes
+	// Décoder les données JSON
 	var recettes []models.Recette
-	err = json.Unmarshal(data, &recettes)
-	if err != nil {
-		return err
+	if err := json.Unmarshal(data, &recettes); err != nil {
+		log.Printf("Failed to unmarshal JSON: %v", err)
+		return c.Status(500).SendString("Erreur lors du décodage des données JSON")
 	}
 
-	// Insérer chaque recette dans la collection "recettes" de la base de données "mydb"
+	// Insérer les recettes dans MongoDB
 	for _, recette := range recettes {
 		_, err := recetteCollection.InsertOne(context.Background(), recette)
 		if err != nil {
-			return err
+			log.Printf("Failed to insert recette: %v", err)
+			return c.Status(500).SendString("Erreur lors de l'insertion des recettes")
 		}
 	}
-	fmt.Println(recettes)
+	log.Println("Recettes ajoutées avec succès")
 
-	// Réponse HTTP avec un message de succès
-	return c.SendString("Recettes ajoutées avec succès")
+	return c.Status(201).SendString("Recettes ajoutées avec succès")
 }
 
+// GetAllRecettes retourne toutes les recettes
 func GetAllRecettes(c *fiber.Ctx) error {
-	// Récupérer tous les documents de la collection "recettes"
-	cursor, err := recetteCollection.Find(context.Background(), bson.M{})
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Récupérer toutes les recettes
+	cursor, err := recetteCollection.Find(ctx, bson.M{})
 	if err != nil {
-		return err
+		log.Printf("Failed to fetch recettes: %v", err)
+		return c.Status(500).SendString("Erreur lors de la récupération des recettes")
 	}
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx)
 
-	// Itérer sur tous les documents et les stocker dans une variable slice de recettes
+	// Décoder les recettes
 	var recettes []models.Recette
-	for cursor.Next(context.Background()) {
-		var recette models.Recette
-		err := cursor.Decode(&recette)
-		if err != nil {
-			return err
-		}
-		recettes = append(recettes, recette)
+	if err := cursor.All(ctx, &recettes); err != nil {
+		log.Printf("Failed to decode recettes: %v", err)
+		return c.Status(500).SendString("Erreur lors du décodage des recettes")
 	}
 
-	// Vérifier s'il y a eu une erreur lors de l'itération
-	if err := cursor.Err(); err != nil {
-		return err
-	}
-
-	// Réponse HTTP avec les recettes au format JSON
-	return c.JSON(recettes)
+	return c.Status(200).JSON(recettes)
 }
 
+// GetRecetteByID retourne une recette spécifique en fonction de son ID
 func GetRecetteByID(c *fiber.Ctx) error {
-	// Récupérer l'ID de la recette depuis les paramètres de l'URL
 	id := c.Params("id")
 
-	// Vérifier si l'ID est valide
+	// Convertir l'ID en ObjectID
 	objID, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
+		log.Printf("Invalid recipe ID: %v", err)
 		return c.Status(400).SendString("ID de recette invalide")
 	}
 
-	// Créer un filtre pour chercher la recette avec l'ID correspondant
+	// Rechercher la recette
 	filter := bson.M{"_id": objID}
-
-	// Rechercher la recette dans la base de données
 	var recette models.Recette
-	err = recetteCollection.FindOne(context.Background(), filter).Decode(&recette)
-	if err != nil {
+	if err := recetteCollection.FindOne(context.Background(), filter).Decode(&recette); err != nil {
+		log.Printf("Recipe not found: %v", err)
 		return c.Status(404).SendString("Recette introuvable")
 	}
 
-	// Retourner la recette en JSON
-	return c.JSON(recette)
+	return c.Status(200).JSON(recette)
 }
 
+// GetRecetteByName retourne une recette en fonction de son nom
 func GetRecetteByName(c *fiber.Ctx) error {
-	// Récupérer le nom de la recette depuis les paramètres de l'URL
 	nomRecette := strings.ReplaceAll(c.Params("name"), "%20", " ")
 
-	// Créer un filtre pour chercher la recette avec le nom correspondant
+	// Rechercher la recette par nom
 	filter := bson.M{"name": nomRecette}
-
-	// Rechercher la recette dans la base de données
 	var recette models.Recette
-	err := recetteCollection.FindOne(context.Background(), filter).Decode(&recette)
-	if err != nil {
+	if err := recetteCollection.FindOne(context.Background(), filter).Decode(&recette); err != nil {
+		log.Printf("Recipe not found: %v", err)
 		return c.Status(404).SendString("Recette introuvable")
 	}
 
-	// Retourner la recette en JSON
-	return c.JSON(recette)
+	return c.Status(200).JSON(recette)
 }
 
+// GetRecettesByIngredient retourne toutes les recettes contenant un ingrédient spécifique
 func GetRecettesByIngredient(c *fiber.Ctx) error {
-	// Récupérer l'ingrédient depuis les paramètres de l'URL
 	ingredient := c.Params("unit")
 
-	// Créer un filtre pour chercher toutes les recettes contenant l'ingrédient correspondant
+	// Rechercher les recettes par ingrédient
 	filter := bson.M{"ingredients": bson.M{"$elemMatch": bson.M{"unit": ingredient}}}
-
-	// Rechercher les recettes dans la base de données
-	var recettes []models.Recette
 	cursor, err := recetteCollection.Find(context.Background(), filter)
 	if err != nil {
-		return c.Status(404).SendString("Aucune recette trouvée")
+		log.Printf("Failed to fetch recettes by ingredient: %v", err)
+		return c.Status(500).SendString("Erreur lors de la récupération des recettes")
+	}
+	defer cursor.Close(context.Background())
+
+	// Décoder les recettes
+	var recettes []models.Recette
+	if err := cursor.All(context.Background(), &recettes); err != nil {
+		log.Printf("Failed to decode recettes: %v", err)
+		return c.Status(500).SendString("Erreur lors du décodage des recettes")
 	}
 
-	// Récupérer toutes les recettes dans un slice
-	if err = cursor.All(context.Background(), &recettes); err != nil {
-		return c.Status(404).SendString("Aucune recette trouvée")
-	}
-
-	// Retourner les recettes en JSON
-	return c.JSON(recettes)
+	return c.Status(200).JSON(recettes)
 }
