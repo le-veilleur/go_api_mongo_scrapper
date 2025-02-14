@@ -3,7 +3,7 @@
 
 Pour activer le scraper fait.
 ```bash
-  docker comose up -d
+  sudo docker compose up -d --build
 ```
 
 
@@ -50,7 +50,7 @@ Voici la stack qui vous est **recommandée** pour le projet:
 
 Vous pouvez retrouver l'API API_golang_Mysql et le scrapper_go
 
-[![Golang scrapper_go](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/maxime-louis14/scrapper_go)
-[![API_golang_Mysql](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/maxime-louis14/go_api__scrapper_mysql_docker)
+[![Golang scrapper_go](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/le-veilleur/scrapper_go)
+[![API_golang_Mysql](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/le-veilleur/go_api__scrapper_mysql_docker)
 
 
