@@ -14,16 +14,20 @@ import (
 
 // DBinstance initialise une connexion MongoDB et retourne un client
 func DBinstance() *mongo.Client {
-	// Charger les variables d'environnement
+	// Charger les variables d'environnement (optionnel)
 	err := godotenv.Load(".env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		log.Println("Warning: .env file not found, using environment variables")
 	}
 
 	// Récupérer l'URL MongoDB
 	MongoDb := os.Getenv("MONGODB_URL")
 	if MongoDb == "" {
-		log.Fatal("MONGODB_URL is not set in environment variables")
+		// Fallback vers MONGODB_URI si MONGODB_URL n'est pas défini
+		MongoDb = os.Getenv("MONGODB_URI")
+		if MongoDb == "" {
+			log.Fatal("Neither MONGODB_URL nor MONGODB_URI is set in environment variables")
+		}
 	}
 
 	// Créer un nouveau client MongoDB

@@ -2,13 +2,33 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gocolly/colly"
 )
+
+// Variables de versioning injectées lors du build
+var (
+	version   = "dev"
+	gitCommit = "unknown"
+	buildTime = "unknown"
+)
+
+// BuildInfo contient les informations de build
+type BuildInfo struct {
+	Version   string `json:"version"`
+	GitCommit string `json:"git_commit"`
+	BuildTime string `json:"build_time"`
+	GoVersion string `json:"go_version"`
+	OS        string `json:"os"`
+	Arch      string `json:"arch"`
+}
 
 type Recipe struct {
 	Name         string        `json:"name"`
@@ -28,108 +48,277 @@ type Instruction struct {
 	Description string `json:"description"`
 }
 
-func main() {
-	startTime := time.Now() // Début du chronomètre global
-	totalRequests := 0      // Compteur de requêtes
+type RecipeData struct {
+	URL   string
+	Title string
+	Image string
+}
 
-	log.Println("Démarrage du script de scraping...")
+type ScrapingStats struct {
+	TotalRequests int
+	Mutex         sync.Mutex
+}
 
-	// Créer une instance de collecteur
-	c := colly.NewCollector(
-		colly.Async(true), // Activer le mode asynchrone pour améliorer les performances
-	)
+func (s *ScrapingStats) Increment() {
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	s.TotalRequests++
+}
 
-	// Limiter le nombre de requêtes simultanées et ajouter un délai
-	c.Limit(&colly.LimitRule{
+func (s *ScrapingStats) Get() int {
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	return s.TotalRequests
+}
+
+// printVersionInfo affiche les informations de version
+func printVersionInfo() {
+	fmt.Printf("Go MongoDB Scrapper\n")
+	fmt.Printf("Version: %s\n", version)
+	fmt.Printf("Git Commit: %s\n", gitCommit)
+	fmt.Printf("Build Time: %s\n", buildTime)
+	fmt.Printf("Go Version: %s\n", runtime.Version())
+	fmt.Printf("OS/Arch: %s/%s\n\n", runtime.GOOS, runtime.GOARCH)
+}
+
+// getBuildInfo retourne les informations de build
+func getBuildInfo() BuildInfo {
+	return BuildInfo{
+		Version:   version,
+		GitCommit: gitCommit,
+		BuildTime: buildTime,
+		GoVersion: runtime.Version(),
+		OS:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+	}
+}
+
+// createMainCollector crée et configure le collecteur principal pour la page de liste
+func createMainCollector(stats *ScrapingStats, recipeURLs chan<- RecipeData) *colly.Collector {
+	collector := colly.NewCollector()
+	collector.Limit(&colly.LimitRule{
 		DomainGlob:  "*",
-		Parallelism: 10,
-		Delay:       100 * time.Millisecond,
+		Parallelism: 5,
+		Delay:       50 * time.Millisecond,
 	})
 
-	// Mesurer le temps pris par chaque requête
-	c.OnRequest(func(r *colly.Request) {
-		totalRequests++ // Incrémenter le compteur de requêtes
-		log.Printf("Début de la requête vers %s\n", r.URL)
-		r.Ctx.Put("start_time", time.Now())
+	collector.OnRequest(func(r *colly.Request) {
+		stats.Increment()
+		log.Printf("Début de la requête principale vers %s\n", r.URL)
 	})
 
-	c.OnResponse(func(r *colly.Response) {
-		start := r.Ctx.GetAny("start_time").(time.Time)
-		duration := time.Since(start)
-		log.Printf("Réponse reçue de %s en %v\n", r.Request.URL, duration)
-	})
-
-	var recipes []Recipe
-
-	// Sélectionner les liens de recette et visiter chaque page de recette
-	c.OnHTML("div.mntl-taxonomysc-article-list-group .mntl-card", func(e *colly.HTMLElement) {
-		page := e.Request.AbsoluteURL(e.Attr("href")) // Obtenir l'URL absolue
+	collector.OnHTML("div.mntl-taxonomysc-article-list-group .mntl-card", func(e *colly.HTMLElement) {
+		page := e.Request.AbsoluteURL(e.Attr("href"))
 		title := e.ChildText("span.card__title-text")
 		image := e.ChildAttr("img", "data-src")
 
-		recipe := Recipe{Name: title, Page: page, Image: image}
-		recipes = append(recipes, recipe)
+		if page != "" && title != "" {
+			recipeData := RecipeData{
+				URL:   page,
+				Title: title,
+				Image: image,
+			}
 
-		log.Printf("La recette '%s' a été collectée\n", recipe.Name)
-
-		// Visiter la page de recette
-		err := c.Visit(page)
-		if err != nil {
-			log.Println("Erreur lors de la visite de la page de recette: ", err)
+			select {
+			case recipeURLs <- recipeData:
+				log.Printf("URL de recette ajoutée à la queue: '%s'\n", title)
+			default:
+				log.Printf("Channel plein, recette ignorée: '%s'\n", title)
+			}
 		}
 	})
 
-	c.OnHTML("div.mntl-structured-ingredients", func(e *colly.HTMLElement) {
-		ingredients := []Ingredient{}
+	return collector
+}
+
+// createRecipeCollector crée un collecteur pour scraper une recette individuelle
+func createRecipeCollector(stats *ScrapingStats) *colly.Collector {
+	collector := colly.NewCollector()
+	collector.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: 1,
+		Delay:       100 * time.Millisecond,
+	})
+
+	collector.OnRequest(func(r *colly.Request) {
+		stats.Increment()
+	})
+
+	return collector
+}
+
+// scrapeRecipeDetails configure les handlers pour extraire les détails d'une recette
+func scrapeRecipeDetails(collector *colly.Collector, recipe *Recipe, completedRecipes chan<- Recipe) {
+	// Collecter les ingrédients
+	collector.OnHTML("div.mntl-structured-ingredients", func(e *colly.HTMLElement) {
+		var ingredients []Ingredient
 
 		e.ForEach("li.mntl-structured-ingredients__list-item", func(_ int, ingr *colly.HTMLElement) {
 			quantity := ingr.ChildText("span[data-ingredient-quantity=true]")
 			unit := ingr.ChildText("span[data-ingredient-unit=true]")
 			ingredients = append(ingredients, Ingredient{Quantity: quantity, Unit: unit})
 		})
-		if len(recipes) > 0 {
-			recipes[len(recipes)-1].Ingredients = ingredients
-		}
+
+		recipe.Ingredients = ingredients
 	})
 
-	c.OnHTML("div.recipe__steps", func(e *colly.HTMLElement) {
-		instructions := []Instruction{}
+	// Collecter les instructions
+	collector.OnHTML("div.recipe__steps", func(e *colly.HTMLElement) {
+		var instructions []Instruction
 		e.ForEach("li", func(i int, inst *colly.HTMLElement) {
 			number := strconv.Itoa(i + 1)
 			description := inst.ChildText("p.mntl-sc-block")
 			instructions = append(instructions, Instruction{Number: number, Description: description})
 		})
-		if len(recipes) > 0 {
-			recipes[len(recipes)-1].Instructions = instructions
-		}
+
+		recipe.Instructions = instructions
 	})
 
-	// Enregistrer la recette dans le fichier JSON
-	c.OnScraped(func(r *colly.Response) {
-		content, err := json.MarshalIndent(recipes, "", "  ") // Ajouter un formatage lisible
-		if err != nil {
-			log.Println("Erreur lors de la sérialisation des recettes: ", err)
-			return
-		}
-		fileName := "/go_api_mongo_scrapper/scraper/data.json"
-		err = os.WriteFile(fileName, content, 0644)
-		if err != nil {
-			log.Println("Erreur lors de l'enregistrement des recettes: ", err)
-			return
-		}
-		log.Printf("Toutes les recettes ont été enregistrées dans le fichier '%s'\n", fileName)
+	// Quand le scraping de la recette est terminé
+	collector.OnScraped(func(r *colly.Response) {
+		completedRecipes <- *recipe
+		log.Printf("Recette complétée: '%s'\n", recipe.Name)
 	})
+}
 
-	// Démarrer le scraping
-	err := c.Visit("https://www.allrecipes.com/recipes/16369/soups-stews-and-chili/soup/")
+// processRecipe traite une recette individuelle dans une goroutine
+func processRecipe(recipeData RecipeData, stats *ScrapingStats, completedRecipes chan<- Recipe, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	log.Printf("Traitement de la recette: %s\n", recipeData.Title)
+
+	// Créer un collecteur dédié pour cette recette
+	recipeCollector := createRecipeCollector(stats)
+
+	recipe := Recipe{
+		Name:  recipeData.Title,
+		Page:  recipeData.URL,
+		Image: recipeData.Image,
+	}
+
+	// Configurer le scraping des détails
+	scrapeRecipeDetails(recipeCollector, &recipe, completedRecipes)
+
+	// Visiter la page de la recette
+	err := recipeCollector.Visit(recipeData.URL)
 	if err != nil {
-		log.Println("Erreur lors de la visite du site principal: ", err)
+		log.Printf("Erreur lors de la visite de la page de recette '%s': %v\n", recipeData.Title, err)
+	}
+}
+
+// startRecipeProcessor démarre la goroutine qui traite les URLs de recettes
+func startRecipeProcessor(recipeURLs <-chan RecipeData, completedRecipes chan<- Recipe, stats *ScrapingStats, wg *sync.WaitGroup) {
+	go func() {
+		const maxWorkers = 10
+		semaphore := make(chan struct{}, maxWorkers)
+
+		for recipeData := range recipeURLs {
+			wg.Add(1)
+
+			// Acquérir un slot dans le semaphore
+			semaphore <- struct{}{}
+
+			go func(rd RecipeData) {
+				defer func() { <-semaphore }() // Libérer le slot
+				processRecipe(rd, stats, completedRecipes, wg)
+			}(recipeData)
+		}
+
+		// Attendre que toutes les goroutines se terminent
+		wg.Wait()
+		close(completedRecipes)
+	}()
+}
+
+// startRecipeCollector démarre la goroutine qui collecte les recettes terminées
+func startRecipeCollector(completedRecipes <-chan Recipe, recipes *[]Recipe, recipesMutex *sync.RWMutex, done chan<- bool) {
+	go func() {
+		for recipe := range completedRecipes {
+			recipesMutex.Lock()
+			*recipes = append(*recipes, recipe)
+			recipesMutex.Unlock()
+		}
+		done <- true
+	}()
+}
+
+// saveRecipesToFile sauvegarde les recettes dans un fichier JSON
+func saveRecipesToFile(recipes []Recipe, filename string) error {
+	content, err := json.MarshalIndent(recipes, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(filename, content, 0644)
+}
+
+// printStats affiche les statistiques finales
+func printStats(startTime time.Time, totalRequests int, recipesCount int, filename string) {
+	totalDuration := time.Since(startTime)
+	log.Printf("Script terminé en %v\n", totalDuration)
+	log.Printf("Nombre total de requêtes effectuées: %d\n", totalRequests)
+	log.Printf("Nombre de recettes collectées: %d\n", recipesCount)
+	log.Printf("Toutes les recettes ont été enregistrées dans le fichier '%s'\n", filename)
+}
+
+func main() {
+	// Affichage des informations de version
+	printVersionInfo()
+
+	startTime := time.Now()
+	stats := &ScrapingStats{}
+
+	log.Printf("Démarrage du script de scraping avec goroutines (version %s)...\n", version)
+	log.Printf("Build info: %+v\n", getBuildInfo())
+
+	// Channels pour la communication entre goroutines
+	recipeURLs := make(chan RecipeData, 100)
+	completedRecipes := make(chan Recipe, 100)
+	done := make(chan bool)
+
+	// Slice thread-safe pour stocker les recettes
+	var recipes []Recipe
+	var recipesMutex sync.RWMutex
+
+	// WaitGroup pour synchroniser les goroutines
+	var wg sync.WaitGroup
+
+	// Créer le collecteur principal
+	mainCollector := createMainCollector(stats, recipeURLs)
+
+	// Démarrer les goroutines de traitement
+	startRecipeCollector(completedRecipes, &recipes, &recipesMutex, done)
+	startRecipeProcessor(recipeURLs, completedRecipes, stats, &wg)
+
+	// Démarrer le scraping de la page principale
+	log.Println("Début du scraping de la page principale...")
+	err := mainCollector.Visit("https://www.allrecipes.com/recipes/16369/soups-stews-and-chili/soup/")
+	if err != nil {
+		log.Printf("Erreur lors de la visite du site principal: %v\n", err)
 		return
 	}
 
-	c.Wait() // Attendre la fin de toutes les requêtes asynchrones
+	// Fermer le channel des URLs après avoir terminé la collecte
+	close(recipeURLs)
 
-	totalDuration := time.Since(startTime) // Fin du chronomètre global
-	log.Printf("Script terminé en %v\n", totalDuration)
-	log.Printf("Nombre total de requêtes effectuées: %d\n", totalRequests)
+	// Attendre que toutes les recettes soient collectées
+	<-done
+
+	// Sauvegarder les résultats
+	filename := "data.json"
+	recipesMutex.RLock()
+	err = saveRecipesToFile(recipes, filename)
+	recipesCount := len(recipes)
+	recipesMutex.RUnlock()
+
+	if err != nil {
+		log.Printf("Erreur lors de l'enregistrement des recettes: %v\n", err)
+		return
+	}
+
+	// Afficher les statistiques finales
+	printStats(startTime, stats.Get(), recipesCount, filename)
+
+	// Afficher les informations de build dans les stats finales
+	log.Printf("Scraping terminé avec la version %s (commit: %s)\n", version, gitCommit)
 }

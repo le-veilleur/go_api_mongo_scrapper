@@ -1,25 +1,56 @@
-# Utiliser l'image officielle de Go
-FROM golang:1.20-alpine
+# Étape 1 : Construire le binaire
+FROM golang:latest AS builder
 
-# Définir le répertoire de travail pour le serveur
+# Arguments de build pour le versioning
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
 WORKDIR /go_api_mongo_scrapper
 
-# Copier les fichiers nécessaires
+# Copier les fichiers de dépendances
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copier tout le code source
+# Copier le reste du code source
 COPY . .
 
-# Construire le binaire du serveur (dans /go_api_mongo_scrapper)
-RUN go build -o server ./main.go
+# Construire le binaire avec versioning
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.version=${VERSION} -X main.gitCommit=${GIT_COMMIT} -X main.buildTime=${BUILD_TIME}" \
+    -o api-server ./main.go
 
-# Construire le binaire du scraper (dans /go_api_mongo_scrapper/scraper)
-WORKDIR /go_api_mongo_scrapper/scraper
-RUN go build -o scraper ./scraper.go
+# Étape 2 : Image finale minimale
+FROM scratch
 
-# Revenir au répertoire principal
+# Redéclarer les arguments pour cette étape
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+# Copier les certificats CA pour HTTPS
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
 WORKDIR /go_api_mongo_scrapper
 
+# Copier le binaire
+COPY --from=builder /go_api_mongo_scrapper/api-server /go_api_mongo_scrapper/
 
-CMD [ "./server" ]
+# Labels pour traçabilité
+LABEL version="${VERSION}" \
+      git.commit="${GIT_COMMIT}" \
+      build.time="${BUILD_TIME}" \
+      maintainer="Maxime Louis <maxime.louis14@example.com>" \
+      description="Go API MongoDB Scrapper - API Server" \
+      org.opencontainers.image.source="https://github.com/maxime-louis14/go_api_mongo_scrapper"
+
+# Variables d'environnement par défaut
+ENV PORT=8080 \
+    ENV=production \
+    LOG_LEVEL=info
+
+# Exposer les ports
+EXPOSE 8080
+
+# Démarrer l'application
+ENTRYPOINT ["/go_api_mongo_scrapper/api-server"]
