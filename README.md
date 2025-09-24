@@ -315,7 +315,7 @@ Le fichier `docker-compose.yml` configure :
 
 | Variable | Description | Valeur par défaut |
 |----------|-------------|-------------------|
-| `SCRAPER_MAX_WORKERS` | Nombre de workers parallèles | `20` |
+| `SCRAPER_MAX_WORKERS` | Nombre de workers parallèles | `12` (adaptatif) |
 | `SCRAPER_TIMEOUT` | Timeout des requêtes | `30s` |
 | `SCRAPER_BASE_URL` | URL de base à scraper | `https://www.allrecipes.com` |
 | `SCRAPER_MAX_PAGES` | Nombre maximum de pages | `5` |
@@ -407,8 +407,8 @@ make docker-build
 
 ### Scraper
 
-- **Parallélisme** : 20 goroutines simultanées
-- **Vitesse** : ~64 recettes en 3.2 secondes
+- **Parallélisme** : 12 workers adaptatifs (6 cœurs × 2)
+- **Vitesse** : 650 recettes en 21.4 secondes (~30 recettes/seconde)
 - **Mémoire** : Optimisé avec channels et sync.Pool
 - **Robustesse** : Gestion d'erreurs et timeouts configurables
 
@@ -427,7 +427,19 @@ make docker-build
 make benchmark
 ```
 
-**Résultats typiques :**
+**Résultats réels (dernière exécution) :**
+```
+📊 STATISTIQUES DÉTAILLÉES DU SCRAPER
+⏱️  Durée totale: 21.46s
+🚀 Requêtes par seconde: 30.29
+📝 Recettes par seconde: 29.83
+🌐 Total requêtes: 650
+📝 Recettes trouvées: 640
+✅ Taux de succès: 100.0%
+💻 Workers: 12 (6 cœurs × 2 ratio adaptatif)
+```
+
+**Benchmarks de code :**
 ```
 BenchmarkScraper-8          100    12345678 ns/op    4567890 B/op    12345 allocs/op
 BenchmarkAPI-8             1000     1234567 ns/op     123456 B/op     1234 allocs/op
