@@ -1,12 +1,15 @@
 # Étape 1 : Construire le binaire
-FROM golang:latest AS builder
+FROM golang:1.22-alpine AS builder
 
 # Arguments de build pour le versioning
 ARG VERSION=dev
 ARG GIT_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-WORKDIR /go_api_mongo_scrapper
+# Installer les outils nécessaires
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app
 
 # Copier les fichiers de dépendances
 COPY go.mod go.sum ./
@@ -31,10 +34,13 @@ ARG BUILD_TIME=unknown
 # Copier les certificats CA pour HTTPS
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-WORKDIR /go_api_mongo_scrapper
+# Copier les données de timezone
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+WORKDIR /app
 
 # Copier le binaire
-COPY --from=builder /go_api_mongo_scrapper/api-server /go_api_mongo_scrapper/
+COPY --from=builder /app/api-server /app/api-server
 
 # Labels pour traçabilité
 LABEL version="${VERSION}" \
@@ -53,4 +59,4 @@ ENV PORT=8080 \
 EXPOSE 8080
 
 # Démarrer l'application
-ENTRYPOINT ["/go_api_mongo_scrapper/api-server"]
+ENTRYPOINT ["/app/api-server"]

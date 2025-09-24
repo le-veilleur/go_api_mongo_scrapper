@@ -10,9 +10,11 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	"github.com/gofiber/fiber/v2/middleware/logger"
+	fiberlogger "github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/maxime-louis14/api-golang/database"
+	"github.com/maxime-louis14/api-golang/logger"
+	"github.com/maxime-louis14/api-golang/middleware"
 	"github.com/maxime-louis14/api-golang/routes"
 )
 
@@ -41,6 +43,21 @@ type HealthResponse struct {
 	Database  string    `json:"database"`
 }
 
+// Route d'exposition des métriques
+func metricsHandler(c *fiber.Ctx) error {
+	metricsJSON, err := logger.GetMetricsJSON()
+	if err != nil {
+		logger.LogError("Erreur lors de la récupération des métriques", err, nil)
+		return c.Status(500).JSON(fiber.Map{
+			"error":   true,
+			"message": "Erreur lors de la récupération des métriques",
+		})
+	}
+
+	c.Set("Content-Type", "application/json")
+	return c.Send(metricsJSON)
+}
+
 func main() {
 	// Affichage des informations de version
 	fmt.Printf("Go API MongoDB Scrapper\n")
@@ -51,7 +68,14 @@ func main() {
 	fmt.Printf("OS/Arch: %s/%s\n\n", runtime.GOOS, runtime.GOARCH)
 
 	// Initialisation des logs
-	log.Println("Starting server...")
+	logger.LogInfo("Démarrage du serveur", map[string]interface{}{
+		"version":    version,
+		"git_commit": gitCommit,
+		"build_time": buildTime,
+		"go_version": runtime.Version(),
+		"os":         runtime.GOOS,
+		"arch":       runtime.GOARCH,
+	})
 
 	// Initialisation de l'application Fiber avec configuration
 	app := fiber.New(fiber.Config{
@@ -72,25 +96,29 @@ func main() {
 
 	// Middleware
 	app.Use(recover.New())
-	app.Use(logger.New(logger.Config{
+	app.Use(fiberlogger.New(fiberlogger.Config{
 		Format: "[${time}] ${status} - ${method} ${path} - ${latency}\n",
 	}))
 	app.Use(cors.New())
 
-	log.Println("Fiber app initialized with middleware")
+	// Middleware de logging personnalisé
+	app.Use(middleware.LoggingMiddleware())
+
+	logger.LogInfo("Application Fiber initialisée avec les middlewares", nil)
 
 	// Connexion à MongoDB
 	client := database.DBinstance()
 	defer func() {
-		log.Println("Closing MongoDB connection...")
+		logger.LogInfo("Fermeture de la connexion MongoDB", nil)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := client.Disconnect(ctx); err != nil {
+			logger.LogError("Erreur lors de la déconnexion MongoDB", err, nil)
 			log.Fatalf("Error disconnecting MongoDB client: %v", err)
 		}
-		log.Println("MongoDB connection closed")
+		logger.LogInfo("Connexion MongoDB fermée", nil)
 	}()
-	log.Println("Connected to MongoDB")
+	logger.LogInfo("Connecté à MongoDB", nil)
 
 	// Route de health check
 	app.Get("/health", func(c *fiber.Ctx) error {
@@ -101,6 +129,9 @@ func main() {
 		dbStatus := "connected"
 		if err := client.Ping(ctx, nil); err != nil {
 			dbStatus = "disconnected"
+			logger.LogError("Ping MongoDB échoué", err, nil)
+		} else {
+			logger.LogDatabase(logger.INFO, "Ping MongoDB réussi", "ping", "mongodb", time.Since(time.Now()), nil)
 		}
 
 		return c.JSON(HealthResponse{
@@ -130,9 +161,15 @@ func main() {
 		})
 	})
 
+	// Route pour les métriques
+	app.Get("/metrics", metricsHandler)
+
 	// Configuration des routes API
 	routes.RecetteRoute(app)
-	log.Println("Routes configured")
+	logger.LogInfo("Routes configurées", nil)
+
+	// Démarrage du logger de métriques périodique (toutes les 30 secondes)
+	logger.StartMetricsLogger(30 * time.Second)
 
 	// Démarrage du serveur
 	port := os.Getenv("PORT")
@@ -140,11 +177,15 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server running on port %s", port)
-	log.Printf("Health check available at: http://localhost:%s/health", port)
-	log.Printf("Version info available at: http://localhost:%s/version", port)
+	logger.LogInfo("Serveur démarré", map[string]interface{}{
+		"port":        port,
+		"health_url":  "http://localhost:" + port + "/health",
+		"version_url": "http://localhost:" + port + "/version",
+		"metrics_url": "http://localhost:" + port + "/metrics",
+	})
 
 	if err := app.Listen(":" + port); err != nil {
+		logger.LogError("Erreur lors du démarrage du serveur", err, nil)
 		log.Fatalf("Error starting server: %v", err)
 	}
 }

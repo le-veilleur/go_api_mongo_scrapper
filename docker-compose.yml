@@ -8,6 +8,7 @@ services:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: password123
       MONGO_INITDB_DATABASE: recipes
+      TZ: Europe/Paris
     ports:
       - "27017:27017"
     volumes:
@@ -39,6 +40,7 @@ services:
       - MONGODB_URI=mongodb://admin:password123@mongodb:27017/recipes?authSource=admin
       - DB_NAME=recipes
       - LOG_LEVEL=info
+      - TZ=Europe/Paris
     ports:
       - "8080:8080"
     depends_on:
@@ -47,13 +49,14 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && timeout 5s cat <&3 | grep -q '200 OK' || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
     volumes:
       - api_logs:/app/logs
+      - scraper_data:/go_api_mongo_scrapper/scraper
 
   # Scraper Service
   scraper:
@@ -67,10 +70,13 @@ services:
     container_name: go-scraper
     restart: "no"  # Le scraper s'exécute une fois puis s'arrête
     environment:
-      - SCRAPER_MAX_WORKERS=10
+      - SCRAPER_MAX_WORKERS=20
       - SCRAPER_TIMEOUT=30s
       - SCRAPER_BASE_URL=https://www.allrecipes.com
+      - SCRAPER_MAX_PAGES=5
+      - SCRAPER_MAX_RECIPES_PER_PAGE=20
       - LOG_LEVEL=info
+      - TZ=Europe/Paris
     networks:
       - app-network
     volumes:
@@ -89,6 +95,7 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://admin:password123@mongodb:27017/
       ME_CONFIG_BASICAUTH_USERNAME: admin
       ME_CONFIG_BASICAUTH_PASSWORD: admin123
+      TZ: Europe/Paris
     ports:
       - "8081:8081"
     depends_on:

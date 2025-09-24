@@ -48,24 +48,37 @@ func TestRecipeDataStruct(t *testing.T) {
 
 // Test de ScrapingStats
 func TestScrapingStats(t *testing.T) {
-	stats := &ScrapingStats{}
+	stats := NewScrapingStats(10)
 
 	// Test initial
-	assert.Equal(t, 0, stats.Get())
+	assert.Equal(t, int64(0), stats.GetTotalRequests())
+	assert.Equal(t, 10, stats.MaxWorkers)
 
-	// Test increment
-	stats.Increment()
-	assert.Equal(t, 1, stats.Get())
+	// Test increment main page requests
+	stats.IncrementMainPageRequest()
+	assert.Equal(t, int64(1), stats.GetTotalRequests())
+	assert.Equal(t, int64(1), stats.MainPageRequests)
 
-	// Test multiple increments
-	for i := 0; i < 10; i++ {
-		stats.Increment()
-	}
-	assert.Equal(t, 11, stats.Get())
+	// Test increment recipe requests
+	stats.IncrementRecipeRequest()
+	assert.Equal(t, int64(2), stats.GetTotalRequests())
+	assert.Equal(t, int64(1), stats.RecipeRequests)
+
+	// Test recipes found
+	stats.IncrementRecipesFound()
+	assert.Equal(t, int64(1), stats.RecipesFound)
+
+	// Test recipes completed
+	stats.IncrementRecipesCompleted()
+	assert.Equal(t, int64(1), stats.RecipesCompleted)
+
+	// Test recipes failed
+	stats.IncrementRecipesFailed()
+	assert.Equal(t, int64(1), stats.RecipesFailed)
 }
 
 func TestScrapingStatsConcurrency(t *testing.T) {
-	stats := &ScrapingStats{}
+	stats := NewScrapingStats(10)
 	var wg sync.WaitGroup
 	numGoroutines := 100
 	incrementsPerGoroutine := 10
@@ -76,14 +89,84 @@ func TestScrapingStatsConcurrency(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < incrementsPerGoroutine; j++ {
-				stats.Increment()
+				stats.IncrementRecipeRequest()
 			}
 		}()
 	}
 
 	wg.Wait()
-	expected := numGoroutines * incrementsPerGoroutine
-	assert.Equal(t, expected, stats.Get())
+	expected := int64(numGoroutines * incrementsPerGoroutine)
+	assert.Equal(t, expected, stats.GetTotalRequests())
+	assert.Equal(t, expected, stats.RecipeRequests)
+}
+
+// Test des worker stats
+func TestWorkerStats(t *testing.T) {
+	stats := NewScrapingStats(5)
+
+	// Test initial worker stats
+	assert.Len(t, stats.WorkerStats, 0)
+
+	// Mettre à jour les stats d'un worker
+	stats.UpdateWorkerStats(1, 10, 5)
+	stats.UpdateWorkerStats(2, 15, 8)
+
+	// Vérifier que les stats sont correctes
+	assert.Len(t, stats.WorkerStats, 2)
+	assert.Equal(t, int64(10), stats.WorkerStats[1].RequestsHandled)
+	assert.Equal(t, int64(5), stats.WorkerStats[1].RecipesProcessed)
+	assert.Equal(t, int64(15), stats.WorkerStats[2].RequestsHandled)
+	assert.Equal(t, int64(8), stats.WorkerStats[2].RecipesProcessed)
+}
+
+// Test du calcul des stats finales
+func TestCalculateFinalStats(t *testing.T) {
+	stats := NewScrapingStats(10)
+
+	// Simuler quelques requêtes
+	stats.IncrementMainPageRequest()
+	stats.IncrementRecipeRequest()
+	stats.IncrementRecipeRequest()
+	stats.IncrementRecipesFound()
+	stats.IncrementRecipesCompleted()
+
+	// Attendre un peu pour avoir une durée
+	time.Sleep(100 * time.Millisecond)
+
+	// Calculer les stats finales
+	stats.CalculateFinalStats()
+
+	// Vérifier les calculs
+	assert.Equal(t, int64(3), stats.TotalRequests)
+	assert.Equal(t, int64(1), stats.MainPageRequests)
+	assert.Equal(t, int64(2), stats.RecipeRequests)
+	assert.True(t, stats.RequestsPerSecond > 0)
+	assert.True(t, stats.RecipesPerSecond > 0)
+	assert.True(t, stats.TotalDuration > 0)
+}
+
+// Test des stats détaillées
+func TestGetDetailedStats(t *testing.T) {
+	stats := NewScrapingStats(5)
+
+	// Ajouter quelques données
+	stats.IncrementMainPageRequest()
+	stats.IncrementRecipeRequest()
+	stats.IncrementRecipesFound()
+	stats.IncrementRecipesCompleted()
+	stats.UpdateWorkerStats(1, 5, 2)
+
+	// Récupérer les stats détaillées
+	detailedStats := stats.GetDetailedStats()
+
+	// Vérifier que c'est une copie et non une référence
+	assert.Equal(t, int64(2), detailedStats.TotalRequests)
+	assert.Equal(t, int64(1), detailedStats.MainPageRequests)
+	assert.Equal(t, int64(1), detailedStats.RecipeRequests)
+	assert.Equal(t, int64(1), detailedStats.RecipesFound)
+	assert.Equal(t, int64(1), detailedStats.RecipesCompleted)
+	assert.Equal(t, 5, detailedStats.MaxWorkers)
+	assert.Len(t, detailedStats.WorkerStats, 1)
 }
 
 // Test des fonctions utilitaires
@@ -144,7 +227,7 @@ func TestSaveRecipesToFileError(t *testing.T) {
 
 // Test des collecteurs
 func TestCreateMainCollector(t *testing.T) {
-	stats := &ScrapingStats{}
+	stats := NewScrapingStats(10)
 	recipeURLs := make(chan RecipeData, 10)
 	defer close(recipeURLs)
 
@@ -159,7 +242,7 @@ func TestCreateMainCollector(t *testing.T) {
 }
 
 func TestCreateRecipeCollector(t *testing.T) {
-	stats := &ScrapingStats{}
+	stats := NewScrapingStats(10)
 
 	collector := createRecipeCollector(stats)
 
@@ -249,7 +332,7 @@ func TestRecipeDataValidation(t *testing.T) {
 
 // Test de performance
 func TestScrapingStatsPerformance(t *testing.T) {
-	stats := &ScrapingStats{}
+	stats := NewScrapingStats(10)
 	numOperations := 10000
 
 	start := time.Now()
@@ -259,14 +342,14 @@ func TestScrapingStatsPerformance(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			stats.Increment()
+			stats.IncrementRecipeRequest()
 		}()
 	}
 
 	wg.Wait()
 	duration := time.Since(start)
 
-	assert.Equal(t, numOperations, stats.Get())
+	assert.Equal(t, int64(numOperations), stats.GetTotalRequests())
 	// Vérifier que les opérations sont rapides (moins de 1 seconde pour 10k opérations)
 	assert.Less(t, duration, time.Second)
 }
@@ -308,12 +391,12 @@ func TestJSONSerialization(t *testing.T) {
 
 // Benchmark pour les opérations critiques
 func BenchmarkScrapingStatsIncrement(b *testing.B) {
-	stats := &ScrapingStats{}
+	stats := NewScrapingStats(10)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			stats.Increment()
+			stats.IncrementRecipeRequest()
 		}
 	})
 }
