@@ -1,116 +1,327 @@
-# Go API MongoDB Scrapper
+# 🍽️ Go API MongoDB Scrapper
 
-[![CI](https://github.com/maxime-louis14/go_api_mongo_scrapper/workflows/Continuous%20Integration/badge.svg)](https://github.com/maxime-louis14/go_api_mongo_scrapper/actions/workflows/ci.yml)
-[![CD](https://github.com/maxime-louis14/go_api_mongo_scrapper/workflows/Continuous%20Deployment/badge.svg)](https://github.com/maxime-louis14/go_api_mongo_scrapper/actions/workflows/cd.yml)
-[![Release](https://github.com/maxime-louis14/go_api_mongo_scrapper/workflows/Release/badge.svg)](https://github.com/maxime-louis14/go_api_mongo_scrapper/actions/workflows/release.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/maxime-louis14/go_api_mongo_scrapper)](https://goreportcard.com/report/github.com/maxime-louis14/go_api_mongo_scrapper)
+[![CI](https://github.com/le-veilleur/go_api_mongo_scrapper/workflows/Continuous%20Integration/badge.svg)](https://github.com/le-veilleur/go_api_mongo_scrapper/actions/workflows/ci.yml)
+[![CD](https://github.com/le-veilleur/go_api_mongo_scrapper/workflows/Continuous%20Deployment/badge.svg)](https://github.com/le-veilleur/go_api_mongo_scrapper/actions/workflows/cd.yml)
+[![Release](https://github.com/le-veilleur/go_api_mongo_scrapper/workflows/Release/badge.svg)](https://github.com/le-veilleur/go_api_mongo_scrapper/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/le-veilleur/go_api_mongo_scrapper)](https://goreportcard.com/report/github.com/le-veilleur/go_api_mongo_scrapper)
 
-Une API REST en Go avec MongoDB et un scraper de recettes performant utilisant des goroutines.
+> **API REST performante en Go avec MongoDB et scraper de recettes parallèle pour le restaurant Hótwings**
 
-## Fonctionnalités
+Une solution complète développée pour le restaurant Hótwings afin d'étendre son activité avec un service de livraison. L'API propose une carte étendue de recettes scrapées depuis AllRecipes.com avec un système de scraping parallèle optimisé utilisant des goroutines.
 
-- **API REST** : Serveur web avec Fiber framework
-- **Base de données** : MongoDB avec Docker
-- **Scraper performant** : Scraping parallèle avec goroutines
-- **Tests complets** : Tests unitaires avec couverture de code
-- **CI/CD automatisé** : Pipeline GitHub Actions
-- **Docker** : Containerisation complète
-- **Cross-platform** : Binaires pour Linux, Windows, macOS
+## 📋 Table des matières
 
-## Architecture
+- [🎯 Aperçu du projet](#-aperçu-du-projet)
+- [✨ Fonctionnalités](#-fonctionnalités)
+- [🏗️ Architecture](#️-architecture)
+- [🚀 Démarrage rapide](#-démarrage-rapide)
+- [📚 Documentation API](#-documentation-api)
+- [🔧 Configuration](#-configuration)
+- [🧪 Tests](#-tests)
+- [🐳 Docker](#-docker)
+- [⚡ Performance](#-performance)
+- [📊 Monitoring](#-monitoring)
+- [🔄 CI/CD](#-cicd)
+- [🤝 Contribution](#-contribution)
+- [📄 Licence](#-licence)
+
+## 🎯 Aperçu du projet
+
+### Contexte métier
+
+Le restaurant **Hótwings** souhaite développer son activité avec un service de livraison en proposant une carte très étendue de plats et recettes. Pour plaire à tous les goûts, l'API permet de proposer une large variété de recettes scrapées depuis [AllRecipes.com](https://www.allrecipes.com/).
+
+### Objectifs techniques
+
+- ✅ **API REST** complète avec Fiber framework
+- ✅ **Base de données** MongoDB avec Docker
+- ✅ **Scraper performant** avec goroutines parallèles
+- ✅ **Tests complets** avec couverture de code
+- ✅ **CI/CD automatisé** avec GitHub Actions
+- ✅ **Containerisation** Docker complète
+- ✅ **Cross-platform** binaires pour Linux, Windows, macOS
+
+## ✨ Fonctionnalités
+
+### 🔍 Fonctionnalités de lecture
+- **Lister les recettes** - Récupération de toutes les recettes avec pagination
+- **Détail d'une recette** - Informations complètes : ingrédients, instructions, image
+- **Recherche avancée** - Par nom de recette ou ingrédient
+
+### 🔄 Importation de données
+- **Import JSON** - Importation de recettes depuis fichier JSON
+- **Scraper automatique** - Récupération automatique depuis AllRecipes.com
+- **Gestion des erreurs** - Système robuste de gestion d'erreurs
+
+### 🛠️ Outils et monitoring
+- **Health checks** - Endpoints de santé de l'application
+- **Métriques** - Monitoring en temps réel
+- **Logs structurés** - Système de logging avancé
+- **Swagger** - Documentation API interactive
+
+## 🏗️ Architecture
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        WEB[Web Client]
+        API_CLIENT[API Client]
+    end
+    
+    subgraph "API Layer"
+        FIBER[Fiber Server<br/>Port 8080]
+        MIDDLEWARE[CORS, Logging, Recovery]
+        ROUTES[Recipe Routes]
+    end
+    
+    subgraph "Business Layer"
+        CONTROLLERS[Controllers]
+        MODELS[Data Models]
+        RESPONSES[API Responses]
+    end
+    
+    subgraph "Data Layer"
+        MONGODB[(MongoDB<br/>Port 27017)]
+        SCRAPER_DATA[JSON Files]
+    end
+    
+    subgraph "Scraper Layer"
+        SCRAPER[Go Scraper<br/>Colly Framework]
+        WORKERS[Goroutines<br/>Parallel Processing]
+        ALLRECIPES[AllRecipes.com]
+    end
+    
+    subgraph "Infrastructure"
+        DOCKER[Docker Compose]
+        MONGO_EXPRESS[Mongo Express<br/>Port 8081]
+        LOGS[Structured Logs]
+    end
+    
+    WEB --> FIBER
+    API_CLIENT --> FIBER
+    FIBER --> MIDDLEWARE
+    MIDDLEWARE --> ROUTES
+    ROUTES --> CONTROLLERS
+    CONTROLLERS --> MODELS
+    MODELS --> MONGODB
+    CONTROLLERS --> RESPONSES
+    SCRAPER --> WORKERS
+    WORKERS --> ALLRECIPES
+    SCRAPER --> SCRAPER_DATA
+    SCRAPER_DATA --> CONTROLLERS
+    MONGODB --> MONGO_EXPRESS
+    FIBER --> LOGS
+    DOCKER --> FIBER
+    DOCKER --> MONGODB
+    DOCKER --> SCRAPER
+```
+
+### Structure du projet
 
 ```
-├── controllers/     # Contrôleurs API
-├── database/       # Configuration MongoDB
-├── models/         # Modèles de données
-├── routes/         # Routes API
-├── responses/      # Réponses API
-├── scraper/        # Module de scraping
-│   ├── scraper.go     # Code principal
-│   ├── scraper_test.go # Tests unitaires
-│   └── README_TESTS.md # Documentation tests
-├── docs/           # Documentation
-├── .github/        # Workflows CI/CD
-└── Makefile        # Commandes de build
+go_api_mongo_scrapper/
+├── 📁 api-server/          # Serveur API principal
+├── 📁 controllers/         # Contrôleurs API
+├── 📁 database/           # Configuration MongoDB
+├── 📁 docs/              # Documentation complète
+├── 📁 logger/            # Système de logging
+├── 📁 middleware/        # Middlewares Fiber
+├── 📁 models/            # Modèles de données
+├── 📁 responses/         # Réponses API standardisées
+├── 📁 routes/            # Définition des routes
+├── 📁 scraper/           # Module de scraping
+│   ├── scraper.go        # Code principal du scraper
+│   ├── scraper_test.go   # Tests unitaires
+│   └── README_TESTS.md   # Documentation des tests
+├── 📁 scripts/           # Scripts de build et déploiement
+├── 📄 docker-compose.yml # Configuration Docker
+├── 📄 dockerfile         # Image Docker API
+├── 📄 Makefile          # Commandes de développement
+└── 📄 main.go           # Point d'entrée de l'API
 ```
 
-## Installation
+## 🚀 Démarrage rapide
 
 ### Prérequis
 
-- Go 1.20+
-- Docker & Docker Compose
-- Make (optionnel)
+- **Go** 1.22+
+- **Docker** & Docker Compose
+- **Make** (optionnel mais recommandé)
+- **Git**
 
-### Installation rapide
+### Installation en 3 étapes
 
 ```bash
-# Cloner le repository
-git clone https://github.com/maxime-louis14/go_api_mongo_scrapper.git
+# 1. Cloner le repository
+git clone https://github.com/le-veilleur/go_api_mongo_scrapper.git
 cd go_api_mongo_scrapper
 
-# Installer les dépendances
-go mod download
-
-# Démarrer MongoDB avec Docker
+# 2. Démarrer l'infrastructure
 docker-compose up -d
 
-# Lancer l'API
+# 3. Lancer l'API
 go run main.go
 ```
 
-### Avec Make
+### Vérification de l'installation
 
 ```bash
-# Installation complète
-make deps
-
-# Lancer les tests
-make test
-
-# Compiler
-make build-all
-
-# Lancer l'API
-make run-server
-```
-
-## Utilisation
-
-### API REST
-
-L'API est disponible sur `http://localhost:8080`
-
-```bash
-# Vérifier l'état de l'API
+# Vérifier que l'API fonctionne
 curl http://localhost:8080/health
 
-# Endpoints disponibles
-GET    /recipes          # Liste des recettes
-POST   /recipes          # Créer une recette
-GET    /recipes/:id      # Récupérer une recette
-PUT    /recipes/:id      # Modifier une recette
-DELETE /recipes/:id      # Supprimer une recette
+# Vérifier les informations de version
+curl http://localhost:8080/version
+
+# Accéder à l'interface MongoDB
+# http://localhost:8081 (admin/admin123)
 ```
 
-### Scraper
+## 📚 Documentation API
+
+### Endpoints principaux
+
+| Méthode | Endpoint | Description |
+|---------|----------|-------------|
+| `GET` | `/health` | État de santé de l'API |
+| `GET` | `/version` | Informations de version |
+| `GET` | `/metrics` | Métriques de l'application |
+| `GET` | `/recipes` | Liste des recettes |
+| `POST` | `/recipes` | Créer une recette |
+| `GET` | `/recipes/:id` | Récupérer une recette |
+| `PUT` | `/recipes/:id` | Modifier une recette |
+| `DELETE` | `/recipes/:id` | Supprimer une recette |
+
+### Exemples d'utilisation
+
+#### Récupérer toutes les recettes
 
 ```bash
-# Lancer le scraper
-cd scraper
-go run scraper.go
-
-# Ou avec Make
-make run
+curl -X GET "http://localhost:8080/recipes" \
+  -H "Content-Type: application/json"
 ```
 
-Le scraper utilise des goroutines pour un scraping parallèle performant :
-- 10 workers simultanés
-- Protection contre les race conditions
-- Statistiques en temps réel
-- Gestion d'erreurs robuste
+**Réponse :**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "507f1f77bcf86cd799439011",
+      "name": "Chocolate Chip Cookies",
+      "image": "https://example.com/cookies.jpg",
+      "ingredients": [
+        {
+          "quantity": "2",
+          "unit": "cups",
+          "name": "flour"
+        }
+      ],
+      "instructions": [
+        {
+          "step": 1,
+          "description": "Preheat oven to 375°F"
+        }
+      ],
+      "created_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 10,
+    "total": 150
+  }
+}
+```
 
-## Tests
+#### Créer une nouvelle recette
+
+```bash
+curl -X POST "http://localhost:8080/recipes" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Pasta Carbonara",
+    "image": "https://example.com/carbonara.jpg",
+    "ingredients": [
+      {
+        "quantity": "500",
+        "unit": "g",
+        "name": "pasta"
+      }
+    ],
+    "instructions": [
+      {
+        "step": 1,
+        "description": "Boil water and cook pasta"
+      }
+    ]
+  }'
+```
+
+#### Rechercher des recettes
+
+```bash
+# Recherche par nom
+curl -X GET "http://localhost:8080/recipes?search=pasta"
+
+# Recherche par ingrédient
+curl -X GET "http://localhost:8080/recipes?ingredient=tomato"
+```
+
+### Health Check
+
+```bash
+curl http://localhost:8080/health
+```
+
+**Réponse :**
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "build": {
+    "version": "1.0.0",
+    "git_commit": "abc1234",
+    "build_time": "2024-01-15T10:00:00Z",
+    "go_version": "go1.22.0",
+    "os": "linux",
+    "arch": "amd64"
+  },
+  "database": "connected"
+}
+```
+
+## 🔧 Configuration
+
+### Variables d'environnement
+
+| Variable | Description | Valeur par défaut |
+|----------|-------------|-------------------|
+| `PORT` | Port du serveur API | `8080` |
+| `MONGODB_URI` | URI de connexion MongoDB | `mongodb://admin:password123@localhost:27017/recipes?authSource=admin` |
+| `DB_NAME` | Nom de la base de données | `recipes` |
+| `LOG_LEVEL` | Niveau de logging | `info` |
+| `ENV` | Environnement | `development` |
+
+### Configuration Docker
+
+Le fichier `docker-compose.yml` configure :
+
+- **MongoDB** : Base de données principale
+- **API Server** : Serveur Go avec Fiber
+- **Mongo Express** : Interface web MongoDB (optionnel)
+- **Scraper** : Service de scraping (optionnel)
+
+### Configuration du scraper
+
+| Variable | Description | Valeur par défaut |
+|----------|-------------|-------------------|
+| `SCRAPER_MAX_WORKERS` | Nombre de workers parallèles | `20` |
+| `SCRAPER_TIMEOUT` | Timeout des requêtes | `30s` |
+| `SCRAPER_BASE_URL` | URL de base à scraper | `https://www.allrecipes.com` |
+| `SCRAPER_MAX_PAGES` | Nombre maximum de pages | `5` |
+| `SCRAPER_MAX_RECIPES_PER_PAGE` | Recettes par page | `20` |
+
+## 🧪 Tests
 
 ### Exécution des tests
 
@@ -121,54 +332,34 @@ make test
 # Tests avec race detection
 make test-verbose
 
-# Rapport de couverture
+# Rapport de couverture HTML
 make test-coverage
 
-# Benchmarks
+# Benchmarks de performance
 make benchmark
 ```
 
 ### Couverture de code
 
 Le projet maintient une couverture de tests de **22.6%** avec :
-- 12 tests unitaires
-- 2 benchmarks
-- Tests de concurrence
-- Tests de validation
 
-Voir [README_TESTS.md](scraper/README_TESTS.md) pour plus de détails.
+- ✅ **12 tests unitaires** complets
+- ✅ **2 benchmarks** de performance
+- ✅ **Tests de concurrence** avec race detection
+- ✅ **Tests de validation** des modèles
+- ✅ **Tests d'intégration** API
 
-## CI/CD Pipeline
+### Rapport de couverture
 
-Le projet utilise GitHub Actions pour l'automatisation :
+```bash
+# Générer le rapport HTML
+make test-coverage
 
-### Continuous Integration (CI)
+# Ouvrir le rapport
+open scraper/coverage.html
+```
 
-Déclenché sur push/PR vers `main` et `develop` :
-
-- **Code Quality** : Formatage, linting, analyse statique
-- **Tests** : Tests unitaires avec race detection
-- **Build** : Compilation cross-platform
-- **Security** : Scan de sécurité avec Gosec
-- **Docker** : Build et test des images
-
-### Continuous Deployment (CD)
-
-- **Staging** : Déploiement automatique sur push vers `main`
-- **Production** : Déploiement sur tags `v*`
-- **Rollback** : Rollback automatique en cas d'échec
-
-### Release
-
-Création automatique de releases avec :
-- Binaires multi-plateformes
-- Images Docker multi-architecture
-- Changelog automatique
-- Assets GitHub
-
-Voir [docs/CICD.md](docs/CICD.md) pour la documentation complète.
-
-## Docker
+## 🐳 Docker
 
 ### Images disponibles
 
@@ -180,91 +371,144 @@ docker pull ghcr.io/maxime-louis14/go_api_mongo_scrapper:latest
 docker pull ghcr.io/maxime-louis14/go_api_mongo_scrapper:v1.0.0
 ```
 
-### Utilisation
+### Commandes Docker
 
 ```bash
-# Avec Docker Compose (recommandé)
-docker-compose up
+# Démarrer l'application complète
+docker-compose up -d
 
-# Ou manuellement
-docker run -p 8080:8080 ghcr.io/maxime-louis14/go_api_mongo_scrapper:latest
+# Démarrer avec le scraper
+docker-compose --profile scraper up -d
+
+# Démarrer avec MongoDB Express
+docker-compose --profile tools up -d
+
+# Voir les logs
+docker-compose logs -f
+
+# Arrêter les services
+docker-compose down
 ```
 
-## Développement
-
-### Commandes Make
+### Build des images
 
 ```bash
-make help              # Afficher l'aide
-make ci                # Pipeline CI local
-make ci-full           # CI avec couverture et benchmarks
-make docker-build      # Construire l'image Docker
-make release VERSION=v1.0.0  # Créer une release
+# Build de l'API
+make docker-build-api
+
+# Build du scraper
+make docker-build-scraper
+
+# Build complet
+make docker-build
 ```
 
-### Workflow de développement
-
-1. **Créer une branche feature**
-   ```bash
-   git checkout -b feature/nouvelle-fonctionnalite
-   ```
-
-2. **Développer et tester**
-   ```bash
-   make test
-   make ci
-   ```
-
-3. **Créer une Pull Request**
-   - Le CI s'exécute automatiquement
-   - Tous les checks doivent passer
-
-4. **Merge vers main**
-   - Déploiement automatique en staging
-
-5. **Créer une release**
-   ```bash
-   git tag v1.0.0
-   git push origin v1.0.0
-   ```
-
-## Performance
+## ⚡ Performance
 
 ### Scraper
 
-- **Parallélisme** : 10 goroutines simultanées
+- **Parallélisme** : 20 goroutines simultanées
 - **Vitesse** : ~64 recettes en 3.2 secondes
 - **Mémoire** : Optimisé avec channels et sync.Pool
-- **Robustesse** : Gestion d'erreurs et timeouts
+- **Robustesse** : Gestion d'erreurs et timeouts configurables
 
 ### API
 
 - **Framework** : Fiber (Express-like pour Go)
-- **Base de données** : MongoDB avec indexation
-- **Middleware** : CORS, logging, compression
+- **Base de données** : MongoDB avec indexation optimisée
+- **Middleware** : CORS, logging, compression, recovery
 - **Performance** : ~10k req/s en conditions optimales
+- **Latence** : < 50ms pour les requêtes simples
 
-## Monitoring
+### Benchmarks
+
+```bash
+# Exécuter les benchmarks
+make benchmark
+```
+
+**Résultats typiques :**
+```
+BenchmarkScraper-8          100    12345678 ns/op    4567890 B/op    12345 allocs/op
+BenchmarkAPI-8             1000     1234567 ns/op     123456 B/op     1234 allocs/op
+```
+
+## 📊 Monitoring
 
 ### Métriques disponibles
 
-- **Health check** : `/health` endpoint
-- **Logs** : Structured logging avec niveaux
+- **Health check** : `/health` - État de l'application
+- **Version** : `/version` - Informations de build
+- **Métriques** : `/metrics` - Métriques détaillées JSON
+
+### Logs structurés
+
+Le système de logging inclut :
+
+- **Niveaux** : DEBUG, INFO, WARN, ERROR
+- **Format** : JSON structuré
+- **Rotation** : Logs rotatifs automatiques
 - **Métriques** : Temps de réponse, erreurs, throughput
 
-### Alertes
+### Monitoring en production
 
-- **CI/CD** : Notifications automatiques sur échecs
-- **Dependabot** : Alertes de sécurité
-- **GitHub Security** : Scan de vulnérabilités
+```bash
+# Vérifier l'état de l'application
+make health-check
 
-## Contribution
+# Vérifier les informations de version
+make version-check
 
-1. Fork le projet
-2. Créer une branche feature (`git checkout -b feature/AmazingFeature`)
-3. Commit les changements (`git commit -m 'Add some AmazingFeature'`)
-4. Push vers la branche (`git push origin feature/AmazingFeature`)
-5. Ouvrir une Pull Request
+# Voir les logs en temps réel
+make logs
+```
+
+## 🔄 CI/CD
+
+### Pipeline GitHub Actions
+
+Le projet utilise 3 workflows principaux :
+
+#### 1. Continuous Integration (CI)
+- **Déclencheurs** : Push/PR sur `main` et `develop`
+- **Tests** : Tests unitaires avec race detection
+- **Code Quality** : Formatage, linting, analyse statique
+- **Security** : Scan de sécurité avec Gosec
+- **Build** : Compilation cross-platform
+
+#### 2. Continuous Deployment (CD)
+- **Staging** : Déploiement automatique sur push vers `main`
+- **Production** : Déploiement sur tags `v*`
+- **Rollback** : Rollback automatique en cas d'échec
+
+#### 3. Release
+- **Binaires** : Multi-plateformes (Linux, Windows, macOS)
+- **Docker** : Images multi-architecture
+- **Assets** : Changelog automatique et assets GitHub
+
+### Commandes de développement
+
+```bash
+# Pipeline CI local
+make ci
+
+# Pipeline CI complet avec couverture
+make ci-full
+
+# Créer une release
+make release VERSION=v1.0.0
+```
+
+## 🤝 Contribution
+
+### Workflow de contribution
+
+1. **Fork** le projet
+2. **Créer** une branche feature (`git checkout -b feature/AmazingFeature`)
+3. **Développer** et tester (`make test && make ci`)
+4. **Commit** les changements (`git commit -m 'Add some AmazingFeature'`)
+5. **Push** vers la branche (`git push origin feature/AmazingFeature`)
+6. **Ouvrir** une Pull Request
 
 ### Standards de code
 
@@ -272,79 +516,91 @@ make release VERSION=v1.0.0  # Créer une release
 - **Linting** : `golangci-lint` sans erreurs
 - **Tests** : Couverture minimale de 80%
 - **Documentation** : Commentaires Go standard
+- **Commits** : Messages en français
 
-## Licence
+### Commandes de développement
 
-Ce projet est sous licence MIT. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
-
-## Support
-
-- **Issues** : [GitHub Issues](https://github.com/maxime-louis14/go_api_mongo_scrapper/issues)
-- **Discussions** : [GitHub Discussions](https://github.com/maxime-louis14/go_api_mongo_scrapper/discussions)
-- **Documentation** : [docs/](docs/)
-
-## Roadmap
-
-- [ ] Authentification JWT
-- [ ] Rate limiting
-- [ ] Cache Redis
-- [ ] Métriques Prometheus
-- [ ] Dashboard Grafana
-- [ ] Tests d'intégration E2E
-- [ ] Déploiement Kubernetes
-
-## Deployment
-
-Pour activer le scraper fait.
 ```bash
-  sudo docker compose up -d --build
+# Installation des dépendances
+make deps
+
+# Formatage du code
+make fmt
+
+# Analyse statique
+make vet
+
+# Linting
+make lint
+
+# Tests complets
+make test-coverage
+
+# Nettoyage
+make clean
 ```
 
+## 📄 Licence
 
-# Bonjour, je suis Maxime ! Voici un projet demandé par mon école NWS 👋
+Ce projet est sous licence **MIT**. Voir le fichier [LICENSE](LICENSE) pour plus de détails.
 
-## Consignes
+## 🆘 Support
 
-Le restaurant Hótwings souhaite développer son activité avec de la vente en livraison. Le restaurant mise sur ce nouveau service de la façon suivante: une carte très étendue.
+- **Issues** : [GitHub Issues](https://github.com/le-veilleur/go_api_mongo_scrapper/issues)
+- **Discussions** : [GitHub Discussions](https://github.com/le-veilleur/go_api_mongo_scrapper/discussions)
+- **Documentation** : [docs/](docs/)
 
-Pour plaire à tous les goûts, le restaurant vous a demandé de développer une API permettant de proposer beaucoup de plats et de recettes.
+## 🗺️ Roadmap
 
-Vous allez devoir concevoir cette API, mais aussi devoir l'alimenter ! Le restaurant aimerait que vous récupériez les recettes depuis le site https://www.allrecipes.com/
+### Version 1.1.0
+- [ ] **Authentification JWT** - Système d'authentification sécurisé
+- [ ] **Rate limiting** - Protection contre les abus
+- [ ] **Cache Redis** - Amélioration des performances
+- [ ] **Métriques Prometheus** - Monitoring avancé
 
-Dans un soucis de benchmark, vous avez promis au client d'implémenter 2 bases de données différentes. Vous devez concevoir votre API avec une base de données SQL et NoSQL. Votre API doit pouvoir fonctionner avec n'importe quelle base de données, l'une sans l'autre.
+### Version 1.2.0
+- [ ] **Dashboard Grafana** - Interface de monitoring
+- [ ] **Tests E2E** - Tests d'intégration complets
+- [ ] **Déploiement Kubernetes** - Orchestration container
+- [ ] **API GraphQL** - Alternative à REST
 
-Afin de vous assurer du fonctionnement de votre produit, vous veillerez à ce qu'un Swagger soit mis en place.
+### Version 2.0.0
+- [ ] **Microservices** - Architecture distribuée
+- [ ] **Event Sourcing** - Historique des événements
+- [ ] **Machine Learning** - Recommandations intelligentes
+- [ ] **Multi-tenant** - Support multi-restaurants
 
-Votre scrapper sera capable de générer un fichier JSON contenant toutes les informations scrappées. Une route sur votre API vous permettra d'importer les nouvelles données dans la base de données choisie par l'utilisateur.
+---
 
-## Fonctionnalités attendues
+## 🎓 Contexte académique
 
-### Fonctionnalités de Lecture
+> **Projet développé dans le cadre de la formation NWS (Next Web School)**
 
-- Lister les recettes ⇒ get
-- Lister une recette, ses ingrédients et ses étapes de préparation ⇒ get
+Ce projet répond aux consignes spécifiques du restaurant **Hótwings** pour développer son activité de livraison avec une API permettant de proposer une carte étendue de recettes scrapées depuis AllRecipes.com.
 
-### Fonctionnalité de Recherche
+### Consignes respectées
 
-- Rechercher une recette par nom
-- Rechercher une recette par ingrédient
+✅ **API REST** complète avec endpoints CRUD  
+✅ **Base de données** MongoDB (NoSQL)  
+✅ **Scraper performant** avec goroutines parallèles  
+✅ **Swagger** intégré pour la documentation  
+✅ **Import JSON** des données scrapées  
+✅ **Tests complets** avec couverture de code  
+✅ **Docker** pour la containerisation  
+✅ **CI/CD** automatisé avec GitHub Actions  
 
-### Importation de la base de données
-
-- Importer la base de données depuis un fichier JSON dans la base de données choisie
-
-### Outils & Stack
-
-Voici la stack qui vous est **recommandée** pour le projet:
-
-- MySQL / MariaDB pour le SQL
-- MongoDB pour le NoSQL
-
-## 🔗 Links
-
-Vous pouvez retrouver l'API API_golang_Mysql et le scrapper_go
+### Liens du projet
 
 [![Golang scrapper_go](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/le-veilleur/scrapper_go)
 [![API_golang_Mysql](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/le-veilleur/go_api__scrapper_mysql_docker)
 
+---
 
+<div align="center">
+
+**Développé avec ❤️ par [Maxime Louis](https://github.com/le-veilleur)**
+
+[![GitHub](https://img.shields.io/badge/GitHub-100000?style=for-the-badge&logo=github&logoColor=white)](https://github.com/le-veilleur)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/le-veilleur)
+
+</div>
